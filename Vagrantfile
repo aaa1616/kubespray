@@ -18,7 +18,7 @@ SUPPORTED_OS = {
   "coreos-stable"       => {box: "coreos-stable",      user: "core", box_url: COREOS_URL_TEMPLATE % ["stable"]},
   "coreos-alpha"        => {box: "coreos-alpha",       user: "core", box_url: COREOS_URL_TEMPLATE % ["alpha"]},
   "coreos-beta"         => {box: "coreos-beta",        user: "core", box_url: COREOS_URL_TEMPLATE % ["beta"]},
-  "ubuntu1604"          => {box: "generic/ubuntu1604", user: "vagrant"},
+  "ubuntu1604"          => {box: "ubuntu/xenial64", user: "vagrant"},
   "ubuntu1804"          => {box: "generic/ubuntu1804", user: "vagrant"},
   "centos"              => {box: "centos/7",           user: "vagrant"},
   "centos-bento"        => {box: "bento/centos-7.6",   user: "vagrant"},
@@ -56,6 +56,7 @@ $disk_size = "20GB"
 $local_path_provisioner_enabled = false
 $local_path_provisioner_claim_root = "/opt/local-path-provisioner/"
 
+$guest_customize = "vagrant/provisioning/main.yml"
 $playbook = "cluster.yml"
 
 host_vars = {}
@@ -128,6 +129,7 @@ Vagrant.configure("2") do |config|
       end
 
       node.vm.provider :virtualbox do |vb|
+        vb.name = vm_name
         vb.memory = $vm_memory
         vb.cpus = $vm_cpus
         vb.gui = $vm_gui
@@ -176,48 +178,58 @@ Vagrant.configure("2") do |config|
       # Disable swap for each vm
       node.vm.provision "shell", inline: "swapoff -a"
 
-      host_vars[vm_name] = {
-        "ip": ip,
-        "flannel_interface": "eth1",
-        "kube_network_plugin": $network_plugin,
-        "kube_network_plugin_multus": $multi_networking,
-        "download_run_once": "True",
-        "download_localhost": "False",
-        "download_cache_dir": ENV['HOME'] + "/kubespray_cache",
-        # Make kubespray cache even when download_run_once is false
-        "download_force_cache": "True",
-        # Keeping the cache on the nodes can improve provisioning speed while debugging kubespray
-        "download_keep_remote_cache": "False",
-        "docker_keepcache": "1",
-        # These two settings will put kubectl and admin.config in $inventory/artifacts
-        "kubeconfig_localhost": "True",
-        "kubectl_localhost": "True",
-        "local_path_provisioner_enabled": "#{$local_path_provisioner_enabled}",
-        "local_path_provisioner_claim_root": "#{$local_path_provisioner_claim_root}",
-        "ansible_ssh_user": SUPPORTED_OS[$os][:user]
-      }
+      #host_vars[vm_name] = {
+      #  "ip": ip,
+      #  "flannel_interface": "eth1",
+      #  "kube_network_plugin": $network_plugin,
+      #  "kube_network_plugin_multus": $multi_networking,
+      #  "download_run_once": "True",
+      #  "download_localhost": "False",
+      #  "download_cache_dir": ENV['HOME'] + "/kubespray_cache",
+      #  # Make kubespray cache even when download_run_once is false
+      #  "download_force_cache": "True",
+      #  # Keeping the cache on the nodes can improve provisioning speed while debugging kubespray
+      #  "download_keep_remote_cache": "False",
+      #  "docker_keepcache": "1",
+      #  # These two settings will put kubectl and admin.config in $inventory/artifacts
+      #  "kubeconfig_localhost": "True",
+      #  "kubectl_localhost": "True",
+      #  "local_path_provisioner_enabled": "#{$local_path_provisioner_enabled}",
+      #  "local_path_provisioner_claim_root": "#{$local_path_provisioner_claim_root}",
+      #  "ansible_ssh_user": SUPPORTED_OS[$os][:user]
+      #}
 
-      # Only execute the Ansible provisioner once, when all the machines are up and ready.
+      ## Only execute the Ansible provisioner once, when all the machines are up and ready.
       if i == $num_instances
-        node.vm.provision "ansible" do |ansible|
-          ansible.playbook = $playbook
+        # vagrant provisioning
+        node.vm.provision "guest_customize", type:"ansible" do |ansible|
+          ansible.limit = "all, localhost"
+          ansible.playbook = $guest_customize
           $ansible_inventory_path = File.join( $inventory, "hosts.ini")
           if File.exist?($ansible_inventory_path)
             ansible.inventory_path = $ansible_inventory_path
           end
-          ansible.become = true
-          ansible.limit = "all,localhost"
-          ansible.host_key_checking = false
-          ansible.raw_arguments = ["--forks=#{$num_instances}", "--flush-cache", "-e ansible_become_pass=vagrant"]
-          ansible.host_vars = host_vars
-          #ansible.tags = ['download']
-          ansible.groups = {
-            "etcd" => ["#{$instance_name_prefix}-[1:#{$etcd_instances}]"],
-            "kube-master" => ["#{$instance_name_prefix}-[1:#{$kube_master_instances}]"],
-            "kube-node" => ["#{$instance_name_prefix}-[1:#{$kube_node_instances}]"],
-            "k8s-cluster:children" => ["kube-master", "kube-node"],
-          }
         end
+
+      #  node.vm.provision "ansible" do |ansible|
+      #    ansible.playbook = $playbook
+      #    $ansible_inventory_path = File.join( $inventory, "hosts.ini")
+      #    if File.exist?($ansible_inventory_path)
+      #      ansible.inventory_path = $ansible_inventory_path
+      #    end
+      #    ansible.become = true
+      #    ansible.limit = "all,localhost"
+      #    ansible.host_key_checking = false
+      #    ansible.raw_arguments = ["--forks=#{$num_instances}", "--flush-cache", "-e ansible_become_pass=vagrant"]
+      #    ansible.host_vars = host_vars
+      #    #ansible.tags = ['download']
+      #    ansible.groups = {
+      #      "etcd" => ["#{$instance_name_prefix}-[1:#{$etcd_instances}]"],
+      #      "kube-master" => ["#{$instance_name_prefix}-[1:#{$kube_master_instances}]"],
+      #      "kube-node" => ["#{$instance_name_prefix}-[1:#{$kube_node_instances}]"],
+      #      "k8s-cluster:children" => ["kube-master", "kube-node"],
+      #    }
+      #  end
       end
 
     end

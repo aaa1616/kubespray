@@ -1,0 +1,17 @@
+---
+- name: Clone the customize script from github
+  git:
+    repo: https://github.com/aaa1616/ubuntu-after-install.git
+    dest: ubuntu-after-install
+    version: root-1.1
+  retries: 10
+  delay: 5
+  register: pull
+  until: pull is succeeded
+
+- name: Install the customize environment on Ubuntu
+  shell: ./ubuntu-after-install/setup.sh `realpath ./` `realpath ./ubuntu-after-install`
+  retries: 10
+  delay: 5
+  register: result
+  until: result.rc == 0
