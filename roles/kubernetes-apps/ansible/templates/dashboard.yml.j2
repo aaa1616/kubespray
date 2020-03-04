@@ -198,6 +198,8 @@ spec:
           - --enable-skip-login
 {% endif %}
           - --authentication-mode=token{% if kube_basic_auth|default(false) %},basic{% endif %}
+
+          - --namespace=kubernetes-dashboard
           # Uncomment the following line to manually specify Kubernetes API server Host
           # If not specified, Dashboard will attempt to auto discover the API server and connect
           # to it. Uncomment only if the default does not work.
